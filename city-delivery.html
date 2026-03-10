@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RUSH DELIVERY</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0f;
+    font-family: 'Rajdhani', sans-serif;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  #gameCanvas { display: block; }
+
+  #ui {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  #hud {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 18px 24px;
+  }
+
+  .hud-block {
+    background: rgba(0,0,0,0.65);
+    border: 1px solid rgba(255,200,0,0.3);
+    border-radius: 4px;
+    padding: 8px 16px;
+    backdrop-filter: blur(6px);
+  }
+
+  .hud-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: rgba(255,200,0,0.6);
+    text-transform: uppercase;
+  }
+
+  .hud-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    color: #ffe135;
+    line-height: 1;
+  }
+
+  .hud-value.green { color: #39ff88; }
+  .hud-value.red { color: #ff4444; }
+
+  #speedometer {
+    position: absolute;
+    bottom: 28px;
+    right: 28px;
+    width: 110px;
+    height: 110px;
+  }
+
+  #mission-panel {
+    position: absolute;
+    top: 90px;
+    left: 24px;
+    background: rgba(0,0,0,0.75);
+    border: 1px solid rgba(255,200,0,0.4);
+    border-left: 3px solid #ffe135;
+    padding: 10px 16px;
+    border-radius: 0 4px 4px 0;
+    min-width: 220px;
+  }
+
+  #mission-panel .title {
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: rgba(255,200,0,0.6);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  #mission-text {
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    line-height: 1.3;
+  }
+
+  #mission-sub {
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    margin-top: 4px;
+  }
+
+  #screen-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: all;
+    transition: opacity 0.4s;
+  }
+
+  #screen-overlay.hidden { display: none; }
+
+  #screen-overlay h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(48px, 10vw, 90px);
+    color: #ffe135;
+    letter-spacing: 6px;
+    text-shadow: 0 0 40px rgba(255,225,53,0.5), 0 4px 0 rgba(0,0,0,0.8);
+    line-height: 1;
+  }
+
+  #screen-overlay p {
+    font-size: 18px;
+    color: rgba(255,255,255,0.7);
+    margin-top: 10px;
+    letter-spacing: 2px;
+  }
+
+  #screen-overlay .btn {
+    margin-top: 32px;
+    background: #ffe135;
+    color: #0a0a0f;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 4px;
+    border: none;
+    padding: 14px 44px;
+    cursor: pointer;
+    border-radius: 2px;
+    pointer-events: all;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  #screen-overlay .btn:hover { background: #fff; transform: scale(1.04); }
+
+  #delivery-flash {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 52px;
+    color: #39ff88;
+    letter-spacing: 6px;
+    text-shadow: 0 0 30px rgba(57,255,136,0.8);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+
+  #minimap {
+    position: absolute;
+    bottom: 28px;
+    left: 28px;
+    width: 150px;
+    height: 150px;
+    background: rgba(0,0,0,0.7);
+    border: 1px solid rgba(255,200,0,0.3);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  #minimap canvas { width: 100%; height: 100%; }
+
+  .controls-hint {
+    position: absolute;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    color: rgba(255,255,255,0.35);
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+
+  .key {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 3px;
+    padding: 2px 7px;
+    font-size: 11px;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<div id="ui">
+  <div id="hud">
+    <div class="hud-block">
+      <div class="hud-label">Score</div>
+      <div class="hud-value" id="score-val">0</div>
+    </div>
+    <div class="hud-block">
+      <div class="hud-label">Time</div>
+      <div class="hud-value" id="timer-val">60</div>
+    </div>
+    <div class="hud-block">
+      <div class="hud-label">Deliveries</div>
+      <div class="hud-value green" id="deliveries-val">0</div>
+    </div>
+  </div>
+
+  <div id="mission-panel">
+    <div class="title">📦 Current Mission</div>
+    <div id="mission-text">Find the delivery point!</div>
+    <div id="mission-sub">Head to the yellow marker</div>
+  </div>
+
+  <div id="minimap"><canvas id="minimapCanvas" width="150" height="150"></canvas></div>
+
+  <canvas id="speedometer" width="110" height="110"></canvas>
+
+  <div id="delivery-flash">DELIVERED! +100</div>
+
+  <div class="controls-hint">
+    <span class="key">W</span> Accelerate &nbsp;
+    <span class="key">S</span> Brake &nbsp;
+    <span class="key">A</span><span class="key">D</span> Steer &nbsp;
+    <span class="key">Space</span> Handbrake
+  </div>
+
+  <div id="screen-overlay" id="start-screen">
+    <h1>RUSH<br>DELIVERY</h1>
+    <p>CITY COURIER · TIME TRIAL</p>
+    <button class="btn" onclick="startGame()">START ENGINE</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const minimapCanvas = document.getElementById('minimapCanvas');
+const mctx = minimapCanvas.getContext('2d');
+const speedoCanvas = document.getElementById('speedometer');
+const sctx = speedoCanvas.getContext('2d');
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+window.addEventListener('resize', () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+
+// ── WORLD ──────────────────────────────────────────────────────────
+const WORLD = 3000;
+const ROAD_W = 80;
+
+// City blocks: array of {x,y,w,h}
+const blocks = [];
+const roads = []; // {x1,y1,x2,y2,w}
+
+// Generate grid city
+const GRID_COLS = 6, GRID_ROWS = 6;
+const BLOCK_W = 380, BLOCK_H = 340, GAP = ROAD_W;
+const CITY_OFFSET_X = 80, CITY_OFFSET_Y = 80;
+
+for (let r = 0; r < GRID_ROWS; r++) {
+  for (let c = 0; c < GRID_COLS; c++) {
+    blocks.push({
+      x: CITY_OFFSET_X + c * (BLOCK_W + GAP),
+      y: CITY_OFFSET_Y + r * (BLOCK_H + GAP),
+      w: BLOCK_W, h: BLOCK_H
+    });
+  }
+}
+
+// Buildings inside blocks
+const buildings = [];
+for (const b of blocks) {
+  const bCount = 3 + Math.floor(Math.random() * 4);
+  for (let i = 0; i < bCount; i++) {
+    const bw = 60 + Math.random() * 100;
+    const bh = 60 + Math.random() * 120;
+    const bx = b.x + 20 + Math.random() * (b.w - bw - 40);
+    const by = b.y + 20 + Math.random() * (b.h - bh - 40);
+    const hue = Math.random() < 0.3 ? 200 + Math.random() * 40 : 220 + Math.random() * 30;
+    buildings.push({ x: bx, y: by, w: bw, h: bh, hue, floors: 2 + Math.floor(bh/30) });
+  }
+}
+
+// ── DELIVERY POINTS ────────────────────────────────────────────────
+const deliverySpots = [];
+for (let i = 0; i < 12; i++) {
+  const r = Math.floor(Math.random() * GRID_ROWS);
+  const c = Math.floor(Math.random() * GRID_COLS);
+  deliverySpots.push({
+    x: CITY_OFFSET_X + c * (BLOCK_W + GAP) + BLOCK_W / 2,
+    y: CITY_OFFSET_Y + r * (BLOCK_H + GAP) - 20
+  });
+}
+
+// ── GAME STATE ─────────────────────────────────────────────────────
+const keys = {};
+document.addEventListener('keydown', e => { keys[e.code] = true; e.preventDefault(); });
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+let car, score, timeLeft, deliveries, currentTarget, gameRunning, lastTime, flashTimer;
+
+function resetGame() {
+  car = {
+    x: CITY_OFFSET_X + (BLOCK_W + GAP) * 3,
+    y: CITY_OFFSET_Y + (BLOCK_H + GAP) * 3 - 30,
+    angle: 0,
+    speed: 0,
+    steer: 0,
+    width: 22,
+    height: 40,
+    trail: []
+  };
+  score = 0;
+  timeLeft = 90;
+  deliveries = 0;
+  currentTarget = 0;
+  gameRunning = false;
+  flashTimer = 0;
+  updateHUD();
+}
+
+function startGame() {
+  document.getElementById('screen-overlay').classList.add('hidden');
+  gameRunning = true;
+  lastTime = performance.now();
+  nextDelivery();
+  requestAnimationFrame(loop);
+}
+
+function nextDelivery() {
+  currentTarget = Math.floor(Math.random() * deliverySpots.length);
+  const spot = deliverySpots[currentTarget];
+  document.getElementById('mission-text').textContent = `Deliver to Block ${currentTarget + 1}`;
+  document.getElementById('mission-sub').textContent = `Head to the yellow marker`;
+}
+
+function updateHUD() {
+  document.getElementById('score-val').textContent = score;
+  document.getElementById('timer-val').textContent = Math.ceil(timeLeft);
+  document.getElementById('deliveries-val').textContent = deliveries;
+  const timerEl = document.getElementById('timer-val');
+  timerEl.className = 'hud-value' + (timeLeft < 15 ? ' red' : '');
+}
+
+function showDeliveryFlash() {
+  const el = document.getElementById('delivery-flash');
+  el.style.opacity = '1';
+  flashTimer = 1.5;
+}
+
+// ── PHYSICS ────────────────────────────────────────────────────────
+function updateCar(dt) {
+  const accel = keys['KeyW'] || keys['ArrowUp'];
+  const brake = keys['KeyS'] || keys['ArrowDown'];
+  const left  = keys['KeyA'] || keys['ArrowLeft'];
+  const right = keys['KeyD'] || keys['ArrowRight'];
+  const hbrake = keys['Space'];
+
+  const MAX_SPEED = 280;
+  const ACCEL = 180;
+  const DRAG = 0.96;
+  const BRAKE_FORCE = 0.88;
+  const HBRAKE_FORCE = 0.78;
+  const STEER_SPEED = 2.8;
+  const MAX_STEER = 1.0;
+
+  if (accel) car.speed += ACCEL * dt;
+  else if (brake) car.speed -= ACCEL * 0.7 * dt;
+
+  if (hbrake) car.speed *= HBRAKE_FORCE;
+  else if (!accel) car.speed *= DRAG;
+
+  car.speed = Math.max(-MAX_SPEED * 0.4, Math.min(MAX_SPEED, car.speed));
+
+  const steerFactor = Math.min(1, Math.abs(car.speed) / 100);
+  if (left)  car.steer -= STEER_SPEED * dt;
+  else if (right) car.steer += STEER_SPEED * dt;
+  else car.steer *= 0.85;
+  car.steer = Math.max(-MAX_STEER, Math.min(MAX_STEER, car.steer));
+
+  car.angle += car.steer * steerFactor * (car.speed / MAX_SPEED) * 2.5 * dt * 60 * dt;
+
+  const vx = Math.sin(car.angle) * car.speed * dt;
+  const vy = -Math.cos(car.angle) * car.speed * dt;
+
+  const nx = car.x + vx;
+  const ny = car.y + vy;
+
+  // Building collision
+  let blocked = false;
+  for (const b of buildings) {
+    if (nx > b.x - 12 && nx < b.x + b.w + 12 && ny > b.y - 12 && ny < b.y + b.h + 12) {
+      blocked = true; break;
+    }
+  }
+  if (!blocked) {
+    car.x = Math.max(10, Math.min(WORLD - 10, nx));
+    car.y = Math.max(10, Math.min(WORLD - 10, ny));
+  } else {
+    car.speed *= -0.3;
+  }
+
+  // Trail
+  car.trail.push({ x: car.x, y: car.y });
+  if (car.trail.length > 40) car.trail.shift();
+
+  // Delivery check
+  const target = deliverySpots[currentTarget];
+  const dx = car.x - target.x;
+  const dy = car.y - target.y;
+  if (Math.sqrt(dx*dx + dy*dy) < 45) {
+    score += 100 + Math.ceil(timeLeft) * 2;
+    deliveries++;
+    timeLeft = Math.min(timeLeft + 15, 120);
+    showDeliveryFlash();
+    updateHUD();
+    nextDelivery();
+  }
+}
+
+// ── CAMERA ─────────────────────────────────────────────────────────
+function getCamera() {
+  const dist = 90 + Math.abs(car.speed) * 0.18;
+  const camX = car.x - Math.sin(car.angle) * dist;
+  const camY = car.y + Math.cos(car.angle) * dist;
+  return { x: camX, y: camY, angle: car.angle };
+}
+
+// ── DRAW ───────────────────────────────────────────────────────────
+function drawWorld(cam) {
+  // Sky gradient for atmosphere
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  skyGrad.addColorStop(0, '#0d1117');
+  skyGrad.addColorStop(1, '#1a2030');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.save();
+  ctx.translate(canvas.width / 2, canvas.height * 0.55);
+
+  // 3D perspective tilt
+  ctx.scale(1, 0.6);
+  ctx.rotate(-cam.angle);
+  ctx.translate(-cam.x, -cam.y);
+
+  // Road base (asphalt)
+  ctx.fillStyle = '#1c1c24';
+  ctx.fillRect(0, 0, WORLD, WORLD);
+
+  // Road markings - grid lines
+  ctx.strokeStyle = '#2a2a38';
+  ctx.lineWidth = 1;
+  for (let c = 0; c <= GRID_COLS; c++) {
+    const rx = CITY_OFFSET_X + c * (BLOCK_W + GAP) - GAP/2;
+    ctx.beginPath(); ctx.moveTo(rx, 0); ctx.lineTo(rx, WORLD); ctx.stroke();
+  }
+  for (let r = 0; r <= GRID_ROWS; r++) {
+    const ry = CITY_OFFSET_Y + r * (BLOCK_H + GAP) - GAP/2;
+    ctx.beginPath(); ctx.moveTo(0, ry); ctx.lineTo(WORLD, ry); ctx.stroke();
+  }
+
+  // Road center dashes
+  ctx.strokeStyle = '#ffe13533';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([20, 20]);
+  for (let c = 0; c <= GRID_COLS; c++) {
+    const rx = CITY_OFFSET_X + c * (BLOCK_W + GAP) - GAP/2;
+    ctx.beginPath(); ctx.moveTo(rx, 0); ctx.lineTo(rx, WORLD); ctx.stroke();
+  }
+  for (let r = 0; r <= GRID_ROWS; r++) {
+    const ry = CITY_OFFSET_Y + r * (BLOCK_H + GAP) - GAP/2;
+    ctx.beginPath(); ctx.moveTo(0, ry); ctx.lineTo(WORLD, ry); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // Sidewalks
+  ctx.fillStyle = '#252530';
+  for (const b of blocks) {
+    ctx.fillRect(b.x - 8, b.y - 8, b.w + 16, b.h + 16);
+  }
+
+  // Block ground
+  ctx.fillStyle = '#1e1e28';
+  for (const b of blocks) {
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+  }
+
+  // Buildings
+  for (const b of buildings) {
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(b.x + 6, b.y + 6, b.w, b.h);
+    // Body
+    const grad = ctx.createLinearGradient(b.x, b.y, b.x + b.w, b.y + b.h);
+    grad.addColorStop(0, `hsl(${b.hue},15%,22%)`);
+    grad.addColorStop(1, `hsl(${b.hue},10%,14%)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    // Windows
+    ctx.fillStyle = `hsla(${b.hue + 30},50%,70%,0.7)`;
+    const wCols = Math.floor(b.w / 18);
+    const wRows = b.floors;
+    for (let wr = 0; wr < wRows; wr++) {
+      for (let wc = 0; wc < wCols; wc++) {
+        if (Math.random() > 0.35) {
+          ctx.fillRect(b.x + 6 + wc * 18, b.y + 8 + wr * (b.h / wRows), 10, 8);
+        }
+      }
+    }
+    // Roof accent
+    ctx.fillStyle = `hsl(${b.hue},20%,30%)`;
+    ctx.fillRect(b.x, b.y, b.w, 6);
+  }
+
+  // Delivery target
+  const target = deliverySpots[currentTarget];
+  const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 200);
+  const ring = 20 + pulse * 12;
+  ctx.beginPath();
+  ctx.arc(target.x, target.y, ring, 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(255,225,53,${0.4 + pulse * 0.4})`;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(target.x, target.y, 14, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(255,225,53,${0.6 + pulse * 0.3})`;
+  ctx.fill();
+  // Package icon
+  ctx.fillStyle = '#0a0a0f';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('📦', target.x, target.y);
+
+  // Car trail
+  for (let i = 0; i < car.trail.length - 1; i++) {
+    const alpha = i / car.trail.length * 0.25;
+    ctx.beginPath();
+    ctx.moveTo(car.trail[i].x, car.trail[i].y);
+    ctx.lineTo(car.trail[i+1].x, car.trail[i+1].y);
+    ctx.strokeStyle = `rgba(255,100,50,${alpha})`;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
+
+  // Car
+  ctx.save();
+  ctx.translate(car.x, car.y);
+  ctx.rotate(car.angle);
+
+  // Car shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillRect(-car.width/2 + 4, -car.height/2 + 4, car.width, car.height);
+
+  // Car body
+  const carGrad = ctx.createLinearGradient(-car.width/2, 0, car.width/2, 0);
+  carGrad.addColorStop(0, '#cc2200');
+  carGrad.addColorStop(0.5, '#ff3311');
+  carGrad.addColorStop(1, '#cc2200');
+  ctx.fillStyle = carGrad;
+  ctx.beginPath();
+  ctx.roundRect(-car.width/2, -car.height/2, car.width, car.height, 4);
+  ctx.fill();
+
+  // Windshield
+  ctx.fillStyle = 'rgba(150,220,255,0.5)';
+  ctx.fillRect(-car.width/2 + 3, -car.height/2 + 4, car.width - 6, 10);
+
+  // Headlights
+  ctx.fillStyle = 'rgba(255,240,180,0.9)';
+  ctx.fillRect(-car.width/2 + 2, -car.height/2, 5, 5);
+  ctx.fillRect(car.width/2 - 7, -car.height/2, 5, 5);
+
+  // Tail lights
+  ctx.fillStyle = 'rgba(255,50,50,0.9)';
+  ctx.fillRect(-car.width/2 + 2, car.height/2 - 5, 5, 5);
+  ctx.fillRect(car.width/2 - 7, car.height/2 - 5, 5, 5);
+
+  // Package on roof
+  ctx.fillStyle = '#8B4513';
+  ctx.fillRect(-7, -8, 14, 12);
+  ctx.fillStyle = '#ffe135';
+  ctx.fillRect(-7, -8, 14, 3);
+  ctx.fillRect(-2, -8, 3, 12);
+
+  ctx.restore();
+  ctx.restore();
+}
+
+function drawSpeedometer() {
+  sctx.clearRect(0, 0, 110, 110);
+  const cx = 55, cy = 55, r = 46;
+  const speed = Math.abs(car.speed);
+  const maxSpeed = 280;
+  const ratio = speed / maxSpeed;
+
+  // Background
+  sctx.beginPath();
+  sctx.arc(cx, cy, r, 0, Math.PI * 2);
+  sctx.fillStyle = 'rgba(0,0,0,0.7)';
+  sctx.fill();
+  sctx.strokeStyle = 'rgba(255,200,0,0.3)';
+  sctx.lineWidth = 1.5;
+  sctx.stroke();
+
+  // Arc track
+  sctx.beginPath();
+  sctx.arc(cx, cy, r - 8, Math.PI * 0.75, Math.PI * 2.25);
+  sctx.strokeStyle = 'rgba(255,255,255,0.1)';
+  sctx.lineWidth = 8;
+  sctx.stroke();
+
+  // Speed arc
+  const endAngle = Math.PI * 0.75 + ratio * Math.PI * 1.5;
+  const speedColor = ratio < 0.5 ? `hsl(${120 - ratio*120},100%,55%)` : `hsl(${60 - (ratio-0.5)*120},100%,55%)`;
+  sctx.beginPath();
+  sctx.arc(cx, cy, r - 8, Math.PI * 0.75, endAngle);
+  sctx.strokeStyle = speedColor;
+  sctx.lineWidth = 8;
+  sctx.stroke();
+
+  // Speed number
+  sctx.fillStyle = '#fff';
+  sctx.font = "bold 18px 'Bebas Neue', sans-serif";
+  sctx.textAlign = 'center';
+  sctx.textBaseline = 'middle';
+  sctx.fillText(Math.round(speed), cx, cy - 4);
+  sctx.font = "10px 'Rajdhani', sans-serif";
+  sctx.fillStyle = 'rgba(255,255,255,0.5)';
+  sctx.fillText('KM/H', cx, cy + 12);
+}
+
+function drawMinimap() {
+  mctx.clearRect(0, 0, 150, 150);
+  const scale = 150 / WORLD;
+
+  // Background
+  mctx.fillStyle = '#0d1117';
+  mctx.fillRect(0, 0, 150, 150);
+
+  // Roads
+  mctx.fillStyle = '#1c2030';
+  mctx.fillRect(0, 0, 150, 150);
+
+  // Blocks
+  mctx.fillStyle = '#252535';
+  for (const b of blocks) {
+    mctx.fillRect(b.x*scale, b.y*scale, b.w*scale, b.h*scale);
+  }
+
+  // Target
+  const target = deliverySpots[currentTarget];
+  const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 300);
+  mctx.beginPath();
+  mctx.arc(target.x*scale, target.y*scale, 5, 0, Math.PI*2);
+  mctx.fillStyle = `rgba(255,225,53,${0.7 + pulse * 0.3})`;
+  mctx.fill();
+
+  // Car
+  mctx.save();
+  mctx.translate(car.x*scale, car.y*scale);
+  mctx.rotate(car.angle);
+  mctx.fillStyle = '#ff3311';
+  mctx.fillRect(-2, -3, 4, 6);
+  mctx.restore();
+
+  // Direction line to target
+  mctx.beginPath();
+  mctx.moveTo(car.x*scale, car.y*scale);
+  mctx.lineTo(target.x*scale, target.y*scale);
+  mctx.strokeStyle = 'rgba(255,225,53,0.3)';
+  mctx.lineWidth = 1;
+  mctx.stroke();
+}
+
+// ── GAME LOOP ──────────────────────────────────────────────────────
+function loop(now) {
+  const dt = Math.min((now - lastTime) / 1000, 0.05);
+  lastTime = now;
+
+  if (!gameRunning) return;
+
+  timeLeft -= dt;
+  updateHUD();
+
+  if (timeLeft <= 0) {
+    endGame();
+    return;
+  }
+
+  if (flashTimer > 0) {
+    flashTimer -= dt;
+    document.getElementById('delivery-flash').style.opacity = Math.min(1, flashTimer);
+  }
+
+  updateCar(dt);
+
+  const cam = getCamera();
+  drawWorld(cam);
+  drawSpeedometer();
+  drawMinimap();
+
+  requestAnimationFrame(loop);
+}
+
+function endGame() {
+  gameRunning = false;
+  const overlay = document.getElementById('screen-overlay');
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = `
+    <h1>TIME'S UP</h1>
+    <p>${deliveries} DELIVERIES COMPLETED</p>
+    <p style="margin-top:8px;font-size:24px;color:#ffe135;font-family:'Bebas Neue',sans-serif;letter-spacing:4px;">SCORE: ${score}</p>
+    <button class="btn" onclick="location.reload()">PLAY AGAIN</button>
+  `;
+}
+
+resetGame();
+</script>
+</body>
+</html>
